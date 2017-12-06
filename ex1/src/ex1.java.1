@@ -1,0 +1,394 @@
+import java.io.*;
+import java.util.*;
+import java.util.function.Function;
+
+class Response {
+    boolean has_reached_goal = false,
+            went_over_all_states = false;
+    List<Direction> way_to_goal = new ArrayList<Direction>();
+}
+class AncestorsStack extends Stack<State> {
+    @Override
+    public synchronized State pop() {
+        State s = super.pop();
+        if (!this.isEmpty() && --this.peek().sons_candidate_for_route==0) {
+            this.pop();
+        }
+        return s;
+    }
+}
+enum Direction {
+    R, RD, D, LD, L, LU, U, RU;
+
+//    public String toString() {
+//        // TODO implement
+//    }
+}
+abstract class State {
+    protected String[][] input_matrix;
+    protected int x, y;
+    protected Direction direction_from_parent;
+    public boolean is_goal = false;
+    public int level;
+    public int sons_candidate_for_route=0;
+
+    public State(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal, int level) {
+        this.input_matrix = input_matrix;
+        this.x=x;
+        this.y=y;
+        this.direction_from_parent = direction_from_parent;
+        this.is_goal=is_goal;
+        this.level=level;
+    }
+    protected State create_son(int x, int y, Direction direction_fron_parent) {
+        // out of bounds
+        if (x<0 || y<0 || x>=this.input_matrix.length || y>=this.input_matrix.length
+                // water / near water
+                || this.input_matrix[x][y].equals("W")) {
+            return null;
+        }
+        // check there are no water in direct line next to the origin when walking diagonally
+        for (int i=-1; i<=1; i+=2) {
+            for (int j=-1; j<=1; j+=2) {
+                if (this.x+i==x && this.y+j==y
+                        && (this.input_matrix[this.x][y].equals("W") || this.input_matrix[x][this.y].equals("W"))) {
+                    return null;
+                }
+            }
+        }
+        return create_son(this.input_matrix, x, y, direction_fron_parent, x==this.input_matrix.length-1 && y==this.input_matrix.length-1, this.level+1);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        State other = (State) obj;
+        return this.x==other.x && this.y==other.y;
+    }
+
+    protected abstract State create_son(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal, int level);
+    public abstract List<State> get_sons();
+}
+
+class IDSState extends State {
+    public IDSState(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal, int level) {
+        super(input_matrix, x, y, direction_from_parent, is_goal, level);
+    }
+
+    protected State create_son(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal, int level) {
+        return new IDSState(input_matrix, x, y, direction_from_parent, is_goal, level);
+    }
+    protected void create_son(List<State> sons, int x, int y, Direction direction_fron_parent) {
+        State son = this.create_son(x, y, direction_fron_parent);
+        if (son != null) {
+            sons.add((IDSState) son);
+        }
+    }
+    public List<State> get_sons() {
+        List<State> sons = new ArrayList<State>();
+        this.create_son(sons,this.x-1, this.y+1, Direction.RU);
+        this.create_son(sons,this.x-1, this.y, Direction.U);
+        this.create_son(sons,this.x-1, this.y-1, Direction.LU);
+        this.create_son(sons,this.x, this.y-1, Direction.L);
+        this.create_son(sons,this.x+1, this.y-1, Direction.LD);
+        this.create_son(sons,this.x+1, this.y, Direction.D);
+        this.create_son(sons,this.x+1, this.y+1, Direction.RD);
+        this.create_son(sons,this.x, this.y+1, Direction.R);
+        return sons;
+    }
+}
+class AStarState extends State {
+    protected int h;
+    // TODO should the distance to this state be the distance cost per the terrain of this state
+    protected int g;
+
+    public AStarState(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal, int level,
+                      int route_cost_from_start) {
+        super(input_matrix, x, y, direction_from_parent, is_goal, level);
+        // using aerial distance for heuristic distance - that is - the distance assuming the path goes through no water,
+        // mountains, or any other obstacle.
+        this.h = Math.min(input_matrix.length-x, input_matrix.length-y);
+        this.g=route_cost_from_start;
+        switch (input_matrix[x][y]) {
+            case "R":
+                this.g+=1;
+                break;
+            case "D":
+                this.g+=3;
+                break;
+            case "H":
+                this.g+=10;
+            // assuming water would be filtered by the algorithm before the point of weighting the distance to the water state is reached
+            default:
+                this.g+=0;
+        }
+    }
+
+    public int f() {
+        return this.g + this.h;
+    }
+
+    protected State create_son(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal, int level) {
+        return new AStarState(input_matrix, x, y, direction_from_parent, is_goal, level);
+    }
+
+//    @Override
+//    public List<State> get_sons() {
+//        List<State> sons = new ArrayList<State>();
+//
+//        return sons;
+//    }
+}
+abstract class SearchAlgorithm {
+    static List<Direction> get_directions(Stack<State> ancestors) {
+        List<Direction> directions = new ArrayList<Direction>();
+        for (State s:ancestors) {
+            // the starting point
+            if (s.direction_from_parent == null) { continue; }
+            directions.add(s.direction_from_parent);
+        }
+        return  directions;
+    }
+
+    public Response run(String[][] input_matrix);
+
+    protected abstract boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s);
+
+    protected Response search(String[][] input_matrix, Function<State,Boolean> is_limited) {//}, int level_limit) {
+        Response response = new Response();
+        Stack<State> states_to_visit = new Stack<State>();
+        AncestorsStack ancestors = new AncestorsStack();
+        // used by the DFS algorithm in order no to revisit sons of states which their sons were already added
+        //TODO: not sure this is not a closed list. learn about the difference between the two.
+        // TODO: check how to implement a stack which support dp so that we never visit a node which is one of the
+        //          fathers of the curr one, and also make sure that the stack can on one hand document the states we
+        //          already been at but on another hold only the nodes to be visited
+        states_to_visit.push(new IDSState(input_matrix, 0, 0, null, false, 0));
+//        ex1.log("limit:"+level_limit);
+        while (! (response.has_reached_goal || states_to_visit.isEmpty())) {
+            State s = states_to_visit.pop();
+            ex1.log("pop: <"+s.x+","+s.y+">, level: "+s.level);
+            ancestors.push(s);
+            if (s.is_goal) {
+                response.way_to_goal=SearchAlgorithm.get_directions(ancestors);
+                response.has_reached_goal = true;
+                ex1.log("goal");
+                break;
+            }
+            List<State> sons = s.get_sons();
+            if (sons.isEmpty()) {
+                ancestors.pop();
+                ex1.log("state without sieblings: <"+s.x+","+s.y+">");
+                continue;
+            }
+            int contributed_sons = 0;
+            for (State son:sons) {
+                // enforce duplicate pruning
+                //TODO: does dup pruning means that no repetitions over ancestors or also over candidates?
+                if (this.is_dup_pruning(son) {
+                    ex1.log("prevented due to pruning: <" + son.x + "," + son.y + ">");
+                } else if (is_limited.apply(son)) {
+                    ex1.log("last state in level: <"+s.x+","+s.y+">");
+                } else {
+                    states_to_visit.push(son);
+                    contributed_sons++;
+                }
+            }
+            if (contributed_sons==0) {
+                ancestors.pop();
+                ex1.log("state without siblings due to pruning: <"+s.x+","+s.y+">");
+                continue;
+            }
+            s.sons_candidate_for_route=contributed_sons;
+
+            StringBuilder sb = new StringBuilder();
+            for (State s_:states_to_visit) {
+                sb.append("<"+s_.x+","+s_.y+","+s_.input_matrix[s_.x][s_.y]+">,");
+            }
+            ex1.log("stack:" + sb);
+            sb = new StringBuilder();
+            for (State s_:ancestors) {
+                sb.append(s_.direction_from_parent+"-<"+s_.x+","+s_.y+">-");
+            }
+            ex1.log("route:" + sb);
+        }
+        return response;
+    }
+
+}
+class IDS extends SearchAlgorithm {
+    protected boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s) {
+        return ancestors.contains(s) || states_to_visit.contains(s);
+    }
+
+    protected Response search_to_level(String[][] input_matrix, int level_limit) {
+        Response response = new Response();
+        Stack<State> states_to_visit = new Stack<State>();
+        AncestorsStack ancestors = new AncestorsStack();
+        // used by the DFS algorithm in order no to revisit sons of states which their sons were already added
+        //TODO: not sure this is not a closed list. learn about the difference between the two.
+        // TODO: check how to implement a stack which support dp so that we never visit a node which is one of the
+        //          fathers of the curr one, and also make sure that the stack can on one hand document the states we
+        //          already been at but on another hold only the nodes to be visited
+        states_to_visit.push(new IDSState(input_matrix, 0, 0, null, false, 0));
+        ex1.log("limit:"+level_limit);
+        while (! (response.has_reached_goal || states_to_visit.isEmpty())) {
+            State s = states_to_visit.pop();
+            ex1.log("pop: <"+s.x+","+s.y+">, level: "+s.level);
+            ancestors.push(s);
+            if (s.is_goal) {
+                response.way_to_goal=SearchAlgorithm.get_directions(ancestors);
+                response.has_reached_goal = true;
+
+                ex1.log("goal");
+                break;
+            }
+            List<State> sons = s.get_sons();
+            if (sons.isEmpty()) {
+                ancestors.pop();
+                ex1.log("state without sieblings: <"+s.x+","+s.y+">");
+                continue;
+            }
+            int contributed_sons = 0;
+            for (State son:sons) {
+                // enforce duplicate pruning
+                //TODO: does dup pruning means that no repetitions over ancestors or also over candidates?
+                if (ancestors.contains(son) || states_to_visit.contains(son)) {
+                    ex1.log("prevented due to pruning: <" + son.x + "," + son.y + ">");
+                } else if (son.level>=level_limit) {
+                    ex1.log("last state in level: <"+s.x+","+s.y+">");
+                } else {
+                    states_to_visit.push(son);
+                    contributed_sons++;
+                }
+            }
+            if (contributed_sons==0) {
+                ancestors.pop();
+                ex1.log("state without siblings due to pruning: <"+s.x+","+s.y+">");
+                continue;
+            }
+            s.sons_candidate_for_route=contributed_sons;
+
+            StringBuilder sb = new StringBuilder();
+            for (State s_:states_to_visit) {
+                sb.append("<"+s_.x+","+s_.y+","+s_.input_matrix[s_.x][s_.y]+">,");
+            }
+            ex1.log("stack:" + sb);
+            sb = new StringBuilder();
+            for (State s_:ancestors) {
+                sb.append(s_.direction_from_parent+"-<"+s_.x+","+s_.y+">-");
+            }
+            ex1.log("route:" + sb);
+        }
+        return response;
+    }
+
+    public Response run(String[][] input_matrix) {
+        Response response = new Response();
+        for (int level_limit=0;
+             !(response.has_reached_goal || response.went_over_all_states
+                     // limiting the search to iterate at most to a level equals to
+                     // the number of elements in the matrix
+                     || level_limit>=input_matrix.length*input_matrix.length) ;
+             level_limit++) {
+            response = this.search_to_level(input_matrix, level_limit);
+        }
+        return response;
+    }
+}
+class AStar extends SearchAlgorithm {
+    public Response run(String[][] input_matrix) {
+        Response response = new Response();
+        // TODO stopping condition in case no goal has been reached?
+        
+        
+        
+        
+        !(response.has_reached_goal || response.went_over_all_states
+                     // limiting the search to iterate at most to a level equals to
+                     // the number of elements in the matrix
+                     || level_limit>=input_matrix.length*input_matrix.length) ;
+            response = this.search_to_level(input_matrix, level_limit);
+        }
+        return response;
+    }
+}
+
+public class ex1 {
+    protected static void produce_output(String output_file_path, Response response) throws IOException {
+        Writer writer = null;
+        try {
+            writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(output_file_path)));
+            if (response.has_reached_goal) {
+                StringBuilder sb = new StringBuilder();
+                for (Direction d : response.way_to_goal) {
+                    sb.append(d+"-");
+                }
+                sb.deleteCharAt(sb.length()-1);
+                sb.append(" "+response.way_to_goal.size());
+                writer.write(sb.toString());
+            } else {
+                writer.write("no path");
+            }
+        } finally {
+            try {writer.close();} catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    protected static Object[] parse_input(String input_file_path) throws IOException {
+        BufferedReader br = null;
+        try {
+            br = new BufferedReader(new FileReader(input_file_path));
+            Object[] parsed_input = new Object[2];
+            parsed_input[0] = br.readLine().equals("IDS")?new IDS():new AStar();
+            int matrix_len = Integer.valueOf(br.readLine());
+            String[][] input_matrix = new String[matrix_len][matrix_len];
+            parsed_input[1]=input_matrix;
+            for (int i=0; i< matrix_len; i++) {
+                input_matrix[i]=br.readLine().split("");
+            }
+            return parsed_input;
+        } finally {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    static Writer writer=null;
+    static void log(String message) {
+        try {
+            if (writer==null) {
+                try {
+                    writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/log")));
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
+            writer.write(message+"\n");
+        } catch (IOException e) {
+        }finally {
+            try {writer.flush();} catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    public static void main(String args[]) {
+        // TODO - open file args[0] to memory representation matrix
+        Object[] parsed_input = new Object[2];
+        try {
+            parsed_input = parse_input(args[0]);
+            SearchAlgorithm search_algorithm = (SearchAlgorithm) parsed_input[0];
+            String[][] input_matrix = (String[][]) parsed_input[1];
+            // run the algorithm over the matrix
+            Response response = search_algorithm.run(input_matrix);
+            // print output
+            produce_output(args[1], response);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
