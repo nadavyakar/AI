@@ -404,7 +404,7 @@ class AStar extends SearchAlgorithm {
      */
     @Override
     protected boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s) {
-        return ancestors.contains(s);
+        return states_to_visit.contains(s);
     }
 }
 
