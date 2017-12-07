@@ -88,6 +88,11 @@ enum Direction implements Comparable<Direction> {
  * from which its instantiate its children on the fly
  */
 abstract class State {
+    @Override
+    public String toString() {
+        return "<"+x+","+y+" t:"+this.input_matrix[x][y]+">";
+    }
+
     protected String[][] input_matrix;
     protected int x, y;
     protected Direction direction_from_parent;
@@ -213,6 +218,10 @@ class IDSState extends State {
  * etc.
  */
 class AStarState extends State {
+    @Override
+    public String toString() {
+        return "<"+x+","+y+" t:"+this.input_matrix[x][y]+" g:"+this.g+" h:"+ this.h+">";
+    }
     // the aerial distance from the goal
     protected int h;
     //  the cost of getting to this state
@@ -320,17 +329,25 @@ abstract class SearchAlgorithm {
             if (s.is_goal) {
                 SearchAlgorithm.extract_way_and_cost(response, ancestors);
                 response.has_reached_goal = true;
+                ex1.log("goal");
                 break;
             }
             List<State> sons = s.get_sons();
             if (sons.isEmpty()) {
                 ancestors.pop();
+                ex1.log("state without sieblings: "+s+"");
                 continue;
             }
             int contributed_sons = 0;
             for (State son:sons) {
-                // enforce duplicate pruning and additional limitation the algorithm apply
-                if (! (this.is_dup_pruning(states_to_visit, ancestors, son) || is_limited.apply(son))) {
+                // enforce duplicate pruning
+                //TODO: does dup pruning means that no repetitions over ancestors or also over candidates?
+                if (this.is_dup_pruning(states_to_visit, ancestors, son)) {
+                    ex1.log("prevented due to pruning: <" + son.x + "," + son.y + ">");
+                // enforce additional limitation the algorithm apply
+                } else if (is_limited.apply(son)) {
+                    ex1.log("last state in level: "+s+"");
+                } else {
                     states_to_visit.push(son);
                     contributed_sons++;
                 }
@@ -338,9 +355,21 @@ abstract class SearchAlgorithm {
             // start folding process
             if (contributed_sons==0) {
                 ancestors.pop();
+                ex1.log("state without siblings due to pruning: "+s+"");
                 continue;
             }
             s.sons_candidate_for_route=contributed_sons;
+
+            StringBuilder sb = new StringBuilder();
+            for (State s_:states_to_visit) {
+                sb.append(s_);
+            }
+            ex1.log("stack:" + sb);
+            sb = new StringBuilder();
+            for (State s_:ancestors) {
+                sb.append(s_.direction_from_parent+"-"+s_+"-");
+            }
+            ex1.log("route:" + sb);
         }
         return response;
     }
@@ -379,6 +408,7 @@ class IDS extends SearchAlgorithm {
                      || level_limit>=input_matrix.length*input_matrix.length) ;
              level_limit++) {
             final int level_limit_ = level_limit;
+            ex1.log("limit:"+level_limit);
             response = this.depth_search(starting_state, s -> ((IDSState) s).level>=level_limit_, i -> false);
         }
         return response;
@@ -458,8 +488,26 @@ public class ex1 {
             }
         }
     }
+    static Writer writer=null;
+    static void log(String message) {
+        try {
+            if (writer==null) {
+                try {
+                    writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/log")));
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
+            writer.write(message+"\n");
+        } catch (IOException e) {
+        }finally {
+            try {writer.flush();} catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
 //TODO remove:
-    public static void main(String args[]) {
+    public static void main1(String args[]) {
         Object[] parsed_input = new Object[2];
         try {
             for (int i=1; i<14; i++) {
@@ -476,7 +524,7 @@ public class ex1 {
         }
     }
 //TODO change back to main
-    public static void main1(String args[]) {
+    public static void main(String args[]) {
         Object[] parsed_input = new Object[2];
         try {
             parsed_input = parse_input(args[0]);
