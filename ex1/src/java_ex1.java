@@ -24,10 +24,8 @@ class AncestorsStack extends Stack<State> {
     public synchronized State pop() {
         State s = super.pop();
         if (this.empty()) {
-            ex1.log("empty stack");
             return s;
         }
-        ex1.log("poping: "+s+" s->p:"+this.peek()+" s->p.c: " + this.peek().sons_candidate_for_route);
         if (!this.isEmpty() && --this.peek().sons_candidate_for_route==0) {
             this.pop();
         }
@@ -299,8 +297,6 @@ abstract class SearchAlgorithm {
         if (response.way_cost==0 || response.way_cost>way_cost) {
             response.way_to_goal = directions;
             response.way_cost = way_cost;
-        } else {
-            ex1.log("longer route: "+way_cost);
         }
     }
 
@@ -315,36 +311,6 @@ abstract class SearchAlgorithm {
      * @return
      */
     protected abstract boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s);
-
-//TODO remote
-    void log(State s, Stack<State> states_to_visit, AncestorsStack ancestors) {
-        String[][] out_matrix=new String[s.input_matrix.length][s.input_matrix.length];
-        for (int k=0;k<s.input_matrix.length; k++) {
-            for (int j=0;j<s.input_matrix.length; j++) {
-                out_matrix[k][j]=s.input_matrix[k][j];
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        int g=0;
-        for (State s_:states_to_visit) {
-            sb.append(s_);
-            out_matrix[s_.x][s_.y]=""+(++g);
-        }
-        ex1.log("stack:" + sb);
-        sb = new StringBuilder();
-        for (State s_:ancestors) {
-            sb.append(s_.direction_from_parent+"-"+s_+"-");
-            out_matrix[s_.x][s_.y]="*";
-        }
-        for (int k=0;k<s.input_matrix.length; k++) {
-            sb.append("\n");
-            for (int j=0;j<s.input_matrix.length; j++) {
-                sb.append(out_matrix[k][j]);
-            }
-        }
-        ex1.log("route:" + sb);
-
-    }
 
     /**
      * execute an in depth search for the goal
@@ -365,22 +331,16 @@ abstract class SearchAlgorithm {
         for (int i=0;
              !(should_stop_on_goal_met.apply(response) || states_to_visit.isEmpty() || is_iteration_limit_met.apply(i));
              i++) {
-            ex1.log("---");
             State s = states_to_visit.pop();
-            ex1.log("visiting: "+s);
             ancestors.push(s);
             if (s.is_goal) {
                 SearchAlgorithm.extract_way_and_cost(response, ancestors);
-                ex1.log("goal cost:" + response.way_cost);
-                log(s,states_to_visit, ancestors);
                 ancestors.pop();
                 response.has_reached_goal = true;
                 continue;
             }
             List<State> sons = s.get_sons();
             if (sons.isEmpty()) {
-                ex1.log("state without sieblings: "+s+"");
-                log(s,states_to_visit, ancestors);
                 ancestors.pop();
                 continue;
             }
@@ -389,10 +349,8 @@ abstract class SearchAlgorithm {
                 // enforce duplicate pruning
                 //TODO: does dup pruning means that no repetitions over ancestors or also over candidates?
                 if (this.is_dup_pruning(states_to_visit, ancestors, son)) {
-                    ex1.log("prevented due to pruning: <" + son.x + "," + son.y + ">");
                 // enforce additional limitation the algorithm apply
                 } else if (is_limited.apply(son)) {
-                    ex1.log("last state in level: "+s+"");
                 } else {
                     states_to_visit.push(son);
                     contributed_sons++;
@@ -400,13 +358,10 @@ abstract class SearchAlgorithm {
             }
             // start folding process
             if (contributed_sons==0) {
-                ex1.log("state without siblings due to pruning: "+s+"");
-                log(s,states_to_visit, ancestors);
                 ancestors.pop();
                 continue;
             }
             s.sons_candidate_for_route=contributed_sons;
-            log(s,states_to_visit, ancestors);
         }
         return response;
     }
@@ -445,7 +400,6 @@ class IDS extends SearchAlgorithm {
                      || level_limit>=input_matrix.length*input_matrix.length) ;
              level_limit++) {
             final int level_limit_ = level_limit;
-            ex1.log("limit:"+level_limit);
             response = this.depth_search(starting_state, s -> ((IDSState) s).level>=level_limit_, i -> false, r -> r.has_reached_goal);
         }
         return response;
@@ -477,12 +431,11 @@ class AStar extends SearchAlgorithm {
      */
     @Override
     protected boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s) {
-//        return ancestors.peek()==s || states_to_visit.contains(s);
         return ancestors.contains(s);
     }
 }
 
-public class ex1 {
+public class java_ex1 {
     protected static void produce_output(String output_file_path, Response response) throws IOException {
         Writer writer = null;
         try {
@@ -493,10 +446,10 @@ public class ex1 {
                     sb.append(d+"-");
                 }
                 sb.deleteCharAt(sb.length()-1);
-                sb.append(" "+response.way_cost+"\n");
+                sb.append(" "+response.way_cost);
                 writer.write(sb.toString());
             } else {
-                writer.write("no path\n");
+                writer.write("no path");
             }
         } finally {
             try {writer.close();} catch (Exception ex) {
@@ -526,46 +479,11 @@ public class ex1 {
             }
         }
     }
-    static Writer writer=null;
-    static void log(String message) {
-        try {
-            if (writer==null) {
-                try {
-                    writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/log")));
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                }
-            }
-            writer.write(message+"\n");
-        } catch (IOException e) {
-        }finally {
-            try {writer.flush();} catch (Exception ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-//TODO remove:
+
     public static void main(String args[]) {
         Object[] parsed_input = new Object[2];
         try {
-            for (int i=1; i<14; i++) {
-                parsed_input = parse_input("/home/nadav/workspaces/ml/ex1/resources/input"+i+".txt");
-                SearchAlgorithm search_algorithm = (SearchAlgorithm) parsed_input[0];
-                String[][] input_matrix = (String[][]) parsed_input[1];
-                // run the algorithm over the matrix
-                Response response = search_algorithm.run(input_matrix);
-                // print output
-                produce_output("/tmp/real/output"+i+".txt", response);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-//TODO change back to main
-    public static void main1(String args[]) {
-        Object[] parsed_input = new Object[2];
-        try {
-            parsed_input = parse_input(args[0]);
+            parsed_input = parse_input("input.txt");
             SearchAlgorithm search_algorithm = (SearchAlgorithm) parsed_input[0];
             String[][] input_matrix = (String[][]) parsed_input[1];
             // run the algorithm over the matrix
