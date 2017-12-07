@@ -10,6 +10,7 @@ class Response {
     boolean has_reached_goal = false,
             went_over_all_states = false;
     List<Direction> way_to_goal = new ArrayList<Direction>();
+    int way_cost;
 }
 
 /**
@@ -91,6 +92,7 @@ abstract class State {
     protected int x, y;
     protected Direction direction_from_parent;
     public boolean is_goal = false;
+    public int cost;
     // used for the ancestor folding process
     public int sons_candidate_for_route=0;
 
@@ -100,6 +102,20 @@ abstract class State {
         this.y=y;
         this.direction_from_parent = direction_from_parent;
         this.is_goal=is_goal;
+        switch (input_matrix[x][y]) {
+            case "R":
+                this.cost=1;
+                break;
+            case "D":
+                this.cost=3;
+                break;
+            case "H":
+                this.cost=10;
+                break;
+                // assuming water would be filtered by the algorithm before the point of weighting the distance to the water state is reached
+            default:
+                this.cost=0;
+        }
     }
 
     /**
@@ -208,20 +224,7 @@ class AStarState extends State {
         // using aerial distance for heuristic distance - that is - the distance assuming the path goes through no water,
         // mountains, or any other obstacle.
         this.h = Math.max(input_matrix.length-x, input_matrix.length-y);
-        this.g=parent_route_cost;
-        switch (input_matrix[x][y]) {
-            case "R":
-                this.g+=1;
-                break;
-            case "D":
-                this.g+=3;
-                break;
-            case "H":
-                this.g+=10;
-            // assuming water would be filtered by the algorithm before the point of weighting the distance to the water state is reached
-            default:
-                this.g+=0;
-        }
+        this.g=parent_route_cost+this.cost;
     }
 
     /**
@@ -269,14 +272,17 @@ class AStarState extends State {
  * mainly the in depth search used by both
  */
 abstract class SearchAlgorithm {
-    static List<Direction> get_directions(Stack<State> ancestors) {
+    static void extract_way_and_cost(Response response, Stack<State> ancestors) {
         List<Direction> directions = new ArrayList<Direction>();
+        int way_cost = 0;
         for (State s:ancestors) {
             // the starting point
             if (s.direction_from_parent == null) { continue; }
             directions.add(s.direction_from_parent);
+            way_cost+=s.cost;
         }
-        return  directions;
+        response.way_to_goal = directions;
+        response.way_cost = way_cost;
     }
 
     public abstract Response run(String[][] input_matrix);
@@ -312,7 +318,7 @@ abstract class SearchAlgorithm {
             State s = states_to_visit.pop();
             ancestors.push(s);
             if (s.is_goal) {
-                response.way_to_goal=SearchAlgorithm.get_directions(ancestors);
+                SearchAlgorithm.extract_way_and_cost(response, ancestors);
                 response.has_reached_goal = true;
                 break;
             }
@@ -419,10 +425,10 @@ public class ex1 {
                     sb.append(d+"-");
                 }
                 sb.deleteCharAt(sb.length()-1);
-                sb.append(" "+(response.way_to_goal.size()+1));
+                sb.append(" "+response.way_cost+"\n");
                 writer.write(sb.toString());
             } else {
-                writer.write("no path");
+                writer.write("no path\n");
             }
         } finally {
             try {writer.close();} catch (Exception ex) {
@@ -452,8 +458,25 @@ public class ex1 {
             }
         }
     }
-
+//TODO remove:
     public static void main(String args[]) {
+        Object[] parsed_input = new Object[2];
+        try {
+            for (int i=1; i<14; i++) {
+                parsed_input = parse_input("/home/nadav/workspaces/ml/ex1/resources/input"+i+".txt");
+                SearchAlgorithm search_algorithm = (SearchAlgorithm) parsed_input[0];
+                String[][] input_matrix = (String[][]) parsed_input[1];
+                // run the algorithm over the matrix
+                Response response = search_algorithm.run(input_matrix);
+                // print output
+                produce_output("/tmp/real/output"+i+".txt", response);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+//TODO change back to main
+    public static void main1(String args[]) {
         Object[] parsed_input = new Object[2];
         try {
             parsed_input = parse_input(args[0]);
