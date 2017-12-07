@@ -1,0 +1,117 @@
+Input
+UCS
+6
+SWWRRR
+RWRRRR
+RWRRHD
+DWHHRW
+RWWRRW
+RWRRWG
+Correct Output
+no path
+Your Output
+
+(2) 1 line errors, , 0 points out of 10.
+Input
+IDS
+5
+SRRRW
+RWRHW
+RRWRW
+RRHWW
+DDRRG
+Correct Output
+D-D-RD-RD-R-R 5
+Your Output
+
+(3) 1 line errors, , 0 points out of 10.
+Input
+UCS
+4
+SRRR
+RWWR
+RRRR
+RRRG
+Correct Output
+D-D-R-R-RD 4
+Your Output
+
+(4) 1 line errors, , 0 points out of 10.
+Input
+IDS
+4
+SDRR
+RWWD
+RHHW
+RRWG
+Correct Output
+no path
+Your Output
+
+(5) 1 line errors, , 0 points out of 10.
+Input
+UCS
+5
+SHDRR
+WWWWR
+RHHDR
+RWWWW
+RRDRG
+Correct Output
+R-R-R-R-D-D-L-L-L-L-D-D-R-R-R-R 48
+Your Output
+
+(6) 1 line errors, , 0 points out of 10.
+Input
+IDS
+2
+SW
+RG
+Correct Output
+D-R 1
+Your Output
+
+(7) 1 line errors, , 0 points out of 10.
+Input
+IDS
+3
+SRR
+RHR
+RRG
+Correct Output
+RD-RD 10
+Your Output
+
+(8) 1 line errors, , 0 points out of 10.
+Input
+UCS
+3
+SRR
+RWR
+RRG
+Correct Output
+R-R-D-D 3
+Your Output
+
+(9) 1 line errors, , 0 points out of 10.
+Input
+UCS
+6
+SRRRRR
+RHRRRR
+RRRRHD
+DDHHRW
+RRRRRR
+RRRRWG
+Correct Output
+R-RD-RD-RD-D-R-D 6
+Your Output
+
+(10) 1 line errors, , 0 points out of 10.
+Input
+UCS
+4
+SDWW
+RHHD
+RHHD
+RRRG

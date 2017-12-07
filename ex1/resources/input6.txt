@@ -1,0 +1,6 @@
+A*
+4
+SRRR
+RWWR
+RRRR
+RRRG

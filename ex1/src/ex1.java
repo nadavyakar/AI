@@ -23,6 +23,11 @@ class AncestorsStack extends Stack<State> {
     @Override
     public synchronized State pop() {
         State s = super.pop();
+        if (this.empty()) {
+            ex1.log("empty stack");
+            return s;
+        }
+        ex1.log("poping: "+s+" s->p:"+this.peek()+" s->p.c: " + this.peek().sons_candidate_for_route);
         if (!this.isEmpty() && --this.peek().sons_candidate_for_route==0) {
             this.pop();
         }
@@ -247,6 +252,7 @@ class AStarState extends State {
      * create a son of the type of AStarState
      */
     protected State create_son(String[][] input_matrix, int x, int y, Direction direction_from_parent, boolean is_goal) {
+        if (x==0 && y==0) { return null;}
         return new AStarState(input_matrix, x, y, direction_from_parent, is_goal, this.g);
     }
 
@@ -290,8 +296,12 @@ abstract class SearchAlgorithm {
             directions.add(s.direction_from_parent);
             way_cost+=s.cost;
         }
-        response.way_to_goal = directions;
-        response.way_cost = way_cost;
+        if (response.way_cost==0 || response.way_cost>way_cost) {
+            response.way_to_goal = directions;
+            response.way_cost = way_cost;
+        } else {
+            ex1.log("longer route: "+way_cost);
+        }
     }
 
     public abstract Response run(String[][] input_matrix);
@@ -306,6 +316,36 @@ abstract class SearchAlgorithm {
      */
     protected abstract boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s);
 
+//TODO remote
+    void log(State s, Stack<State> states_to_visit, AncestorsStack ancestors) {
+        String[][] out_matrix=new String[s.input_matrix.length][s.input_matrix.length];
+        for (int k=0;k<s.input_matrix.length; k++) {
+            for (int j=0;j<s.input_matrix.length; j++) {
+                out_matrix[k][j]=s.input_matrix[k][j];
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        int g=0;
+        for (State s_:states_to_visit) {
+            sb.append(s_);
+            out_matrix[s_.x][s_.y]=""+(++g);
+        }
+        ex1.log("stack:" + sb);
+        sb = new StringBuilder();
+        for (State s_:ancestors) {
+            sb.append(s_.direction_from_parent+"-"+s_+"-");
+            out_matrix[s_.x][s_.y]="*";
+        }
+        for (int k=0;k<s.input_matrix.length; k++) {
+            sb.append("\n");
+            for (int j=0;j<s.input_matrix.length; j++) {
+                sb.append(out_matrix[k][j]);
+            }
+        }
+        ex1.log("route:" + sb);
+
+    }
+
     /**
      * execute an in depth search for the goal
      * @param starting_state the root of this search tree
@@ -316,26 +356,32 @@ abstract class SearchAlgorithm {
      *                               for IDS this condition is irrelevant
      */
     protected Response depth_search(State starting_state, Function<State, Boolean> is_limited,
-                                    Function<Integer, Boolean> is_iteration_limit_met) {
+                                    Function<Integer, Boolean> is_iteration_limit_met,
+                                    Function<Response, Boolean> should_stop_on_goal_met) {
         Response response = new Response();
         Stack<State> states_to_visit = new Stack<State>();
         AncestorsStack ancestors = new AncestorsStack();
         states_to_visit.push(starting_state);
         for (int i=0;
-             ! (response.has_reached_goal || states_to_visit.isEmpty() || is_iteration_limit_met.apply(i));
+             !(should_stop_on_goal_met.apply(response) || states_to_visit.isEmpty() || is_iteration_limit_met.apply(i));
              i++) {
+            ex1.log("---");
             State s = states_to_visit.pop();
+            ex1.log("visiting: "+s);
             ancestors.push(s);
             if (s.is_goal) {
                 SearchAlgorithm.extract_way_and_cost(response, ancestors);
+                ex1.log("goal cost:" + response.way_cost);
+                log(s,states_to_visit, ancestors);
+                ancestors.pop();
                 response.has_reached_goal = true;
-                ex1.log("goal");
-                break;
+                continue;
             }
             List<State> sons = s.get_sons();
             if (sons.isEmpty()) {
-                ancestors.pop();
                 ex1.log("state without sieblings: "+s+"");
+                log(s,states_to_visit, ancestors);
+                ancestors.pop();
                 continue;
             }
             int contributed_sons = 0;
@@ -354,22 +400,13 @@ abstract class SearchAlgorithm {
             }
             // start folding process
             if (contributed_sons==0) {
-                ancestors.pop();
                 ex1.log("state without siblings due to pruning: "+s+"");
+                log(s,states_to_visit, ancestors);
+                ancestors.pop();
                 continue;
             }
             s.sons_candidate_for_route=contributed_sons;
-
-            StringBuilder sb = new StringBuilder();
-            for (State s_:states_to_visit) {
-                sb.append(s_);
-            }
-            ex1.log("stack:" + sb);
-            sb = new StringBuilder();
-            for (State s_:ancestors) {
-                sb.append(s_.direction_from_parent+"-"+s_+"-");
-            }
-            ex1.log("route:" + sb);
+            log(s,states_to_visit, ancestors);
         }
         return response;
     }
@@ -409,7 +446,7 @@ class IDS extends SearchAlgorithm {
              level_limit++) {
             final int level_limit_ = level_limit;
             ex1.log("limit:"+level_limit);
-            response = this.depth_search(starting_state, s -> ((IDSState) s).level>=level_limit_, i -> false);
+            response = this.depth_search(starting_state, s -> ((IDSState) s).level>=level_limit_, i -> false, r -> r.has_reached_goal);
         }
         return response;
     }
@@ -427,7 +464,7 @@ class AStar extends SearchAlgorithm {
     public Response run(String[][] input_matrix) {
         return this.depth_search(
                 new AStarState(input_matrix, 0, 0, null, false, 0),
-                s -> false, i -> i>input_matrix.length*input_matrix.length);
+                s -> false, i -> i>input_matrix.length*input_matrix.length*100, r -> false);
     }
 
     /**
@@ -440,7 +477,8 @@ class AStar extends SearchAlgorithm {
      */
     @Override
     protected boolean is_dup_pruning(Stack<State> states_to_visit, AncestorsStack ancestors, State s) {
-        return states_to_visit.contains(s);
+//        return ancestors.peek()==s || states_to_visit.contains(s);
+        return ancestors.contains(s);
     }
 }
 
@@ -507,7 +545,7 @@ public class ex1 {
         }
     }
 //TODO remove:
-    public static void main1(String args[]) {
+    public static void main(String args[]) {
         Object[] parsed_input = new Object[2];
         try {
             for (int i=1; i<14; i++) {
@@ -524,7 +562,7 @@ public class ex1 {
         }
     }
 //TODO change back to main
-    public static void main(String args[]) {
+    public static void main1(String args[]) {
         Object[] parsed_input = new Object[2];
         try {
             parsed_input = parse_input(args[0]);
