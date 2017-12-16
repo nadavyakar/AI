@@ -31,12 +31,16 @@ class Choise {
 class Player {
     boolean black_player = true;
     String soldier;
-    static HashMap<Object, Player> players = new HashMap<Object, Player>();
-    {
-        players.put(true, new Player(true));
-        players.put(false, new Player(false));
-        players.put("B", new Player(true));
-        players.put("W", new Player(false));
+    protected static HashMap<Object, Player> players = null;
+    static HashMap<Object, Player> get_players() {
+        if (players==null) {
+            players = new HashMap<Object, Player>();
+            players.put(true, new Player(true));
+            players.put(false, new Player(false));
+            players.put("B", new Player(true));
+            players.put("W", new Player(false));
+        }
+        return players;
     }
     Player(boolean black_player) {
         this.black_player = black_player;
@@ -46,6 +50,9 @@ class Player {
     Choise choose(Choise choise_this_layer, Choise choise_next_layer) {
         Double choise_this_layer_val = choise_this_layer.propagated_value ==Double.NaN?Double.valueOf(0):choise_this_layer.propagated_value;
         Double choise_next_layer_val = choise_next_layer.propagated_value ==Double.NaN?Double.valueOf(0):choise_next_layer.propagated_value;
+        if (choise_this_layer.state==null) {
+            return choise_next_layer;
+        }
         if (black_player) {
             return choise_this_layer_val < choise_next_layer_val?choise_next_layer:choise_this_layer;
         } else {
@@ -56,7 +63,7 @@ class Player {
 
 class State {
     protected String[][] game_board;
-    protected Set<int[]> open_cells_coordinates;
+    protected Set<int[]> open_cells_coordinates = new HashSet<int[]>();
     public Player player;
     public Double value;
 
@@ -137,7 +144,7 @@ class State {
         for (int[] empty_cell_coordinates:this.open_cells_coordinates) {
             int x=empty_cell_coordinates[0], y=empty_cell_coordinates[1];
             sons.add(new State(put_soldier(clone_game_board(), x, y, this.player),
-                    Player.players.get(!this.player.black_player)));
+                    Player.get_players().get(!this.player.black_player)));
         }
         return sons;
     }
@@ -152,8 +159,8 @@ class State {
                 vertical_limits = {0, game_board[0].length};
         for (int horizontal_limit:horizontal_limits) {
             for (int i=x;
-                 horizontal_limit<i?i>horizontal_limit:i<horizontal_limit;
-                 i+=horizontal_limit<i?-1:1) {
+                 horizontal_limit<x?i>horizontal_limit:i<horizontal_limit;
+                 i+=horizontal_limit<x?-1:1) {
                 if (!check_and_set_line(game_board,x,y,i,y,player)) {
                     break;
                 }
@@ -163,8 +170,8 @@ class State {
         }
         for (int vertical_limit:vertical_limits) {
             for (int j=y;
-                 vertical_limit<j?j>vertical_limit:j<vertical_limit;
-                 j+=vertical_limit<j?-1:1) {
+                 vertical_limit<y?j>vertical_limit:j<vertical_limit;
+                 j+=vertical_limit<y?-1:1) {
                 if (!check_and_set_line(game_board,x,y,x,j,player)) {
                     break;
                 }
@@ -175,9 +182,9 @@ class State {
         for (int horizontal_limit:horizontal_limits) {
             for (int vertical_limit:vertical_limits) {
                 for (int i=x, j=y;
-                     horizontal_limit<i?i>horizontal_limit:i<horizontal_limit
-                             && vertical_limit<j?j>vertical_limit:j<vertical_limit;
-                     i+=horizontal_limit<i?-1:1, j+=vertical_limit<j?-1:1) {
+                     (horizontal_limit<x?i>horizontal_limit:i<horizontal_limit)
+                             && (vertical_limit<y?j>vertical_limit:j<vertical_limit);
+                     i+=horizontal_limit<x?-1:1, j+=vertical_limit<y?-1:1) {
                     if (!check_and_set_line(game_board,x,y,i,j,player)) {
                         break;
                     }
@@ -292,7 +299,7 @@ public class java_ex2 {
 
     static String search(String[][] game_board) {
         // start with the black player
-        Choise choise = new Choise(new State(game_board, Player.players.get(true)), 0.0);
+        Choise choise = new Choise(new State(game_board, Player.get_players().get(true)), 0.0);
         // until victory or loss
         int level = 0;
         while (Double.isFinite(choise.propagated_value)) {
