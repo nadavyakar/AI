@@ -2,17 +2,23 @@ import java.io.*;
 import java.util.*;
 
 class Log {
+    static Writer writer = null;
     public static void log(String msg) {
-        Writer writer = null;
         try {
-            writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/ml_ex2.log")));
+            if (writer==null) {
+                writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/ml_ex2.log")));
+            }
+            System.out.println(msg);
             writer.write(msg+"\n");
         } catch (Exception e) {
-
-        } finally {
             try {writer.close();} catch (Exception ex) {
                 ex.printStackTrace();
             }
+        }
+    }
+    static void close() {
+        try {writer.close();} catch (Exception ex) {
+            ex.printStackTrace();
         }
     }
 }
@@ -63,7 +69,7 @@ class Player {
 
 class State {
     protected String[][] game_board;
-    protected Set<int[]> open_cells_coordinates = new HashSet<int[]>();
+    protected Set<int[]> open_cells_coordinates = new LinkedHashSet<int[]>();
     public Player player;
     public Double value;
 
@@ -139,58 +145,58 @@ class State {
      */
     public List<State> get_sons() {
         List<State> sons = new ArrayList<State>();
-        Log.log("parent state game board:");
-        Log.log(this.toString());
+//        Log.log("parent state game board:");
+//        Log.log(this.toString());
         for (int[] empty_cell_coordinates:this.open_cells_coordinates) {
-            int x=empty_cell_coordinates[0], y=empty_cell_coordinates[1];
-            sons.add(new State(put_soldier(clone_game_board(), x, y, this.player),
+            int i=empty_cell_coordinates[0], j=empty_cell_coordinates[1];
+            sons.add(new State(put_soldier(clone_game_board(), i, j, this.player),
                     Player.get_players().get(!this.player.black_player)));
         }
         return sons;
     }
 
-    private static String[][] put_soldier(String[][] game_board, int x, int y, Player player) {
-        game_board[x][y]=player.soldier;
+    private static String[][] put_soldier(String[][] game_board, int i, int j, Player player) {
+        game_board[i][j]=player.soldier;
         // find all lines "closed" by this soldier
 
-        Log.log("before putting " + player.soldier +" soldier at "+x+","+y);
-        Log.log(toString(game_board,null));
+//        Log.log("before putting " + player.soldier +" soldier at "+i+","+j);
+//        Log.log(toString(game_board,null));
         int[]   horizontal_limits = {0, game_board.length},
                 vertical_limits = {0, game_board[0].length};
         for (int horizontal_limit:horizontal_limits) {
-            for (int i=x;
-                 horizontal_limit<x?i>horizontal_limit:i<horizontal_limit;
-                 i+=horizontal_limit<x?-1:1) {
-                if (!check_and_set_line(game_board,x,y,i,y,player)) {
+            for (int m=j;
+                 horizontal_limit<j?m>=horizontal_limit:m<horizontal_limit;
+                 m+=horizontal_limit<j?-1:1) {
+                if (!check_and_set_line(game_board,i,j,i,m,player)) {
                     break;
                 }
             }
-            Log.log("after horizon limit "+horizontal_limit);
-            Log.log(toString(game_board,null));
+//            Log.log("after horizon limit "+horizontal_limit);
+//            Log.log(toString(game_board,null));
         }
         for (int vertical_limit:vertical_limits) {
-            for (int j=y;
-                 vertical_limit<y?j>vertical_limit:j<vertical_limit;
-                 j+=vertical_limit<y?-1:1) {
-                if (!check_and_set_line(game_board,x,y,x,j,player)) {
+            for (int m=i;
+                 vertical_limit<i?m>=vertical_limit:m<vertical_limit;
+                 m+=vertical_limit<i?-1:1) {
+                if (!check_and_set_line(game_board,i,j,m,j,player)) {
                     break;
                 }
             }
-            Log.log("after vertical limit "+vertical_limit);
-            Log.log(toString(game_board,null));
+//            Log.log("after vertical limit "+vertical_limit);
+//            Log.log(toString(game_board,null));
         }
         for (int horizontal_limit:horizontal_limits) {
             for (int vertical_limit:vertical_limits) {
-                for (int i=x, j=y;
-                     (horizontal_limit<x?i>horizontal_limit:i<horizontal_limit)
-                             && (vertical_limit<y?j>vertical_limit:j<vertical_limit);
-                     i+=horizontal_limit<x?-1:1, j+=vertical_limit<y?-1:1) {
-                    if (!check_and_set_line(game_board,x,y,i,j,player)) {
+                for (int m=i, n=j;
+                     (horizontal_limit<j?n>=horizontal_limit:n<horizontal_limit)
+                             && (vertical_limit<i?m>=vertical_limit:m<vertical_limit);
+                     n+=horizontal_limit<j?-1:1, m+=vertical_limit<i?-1:1) {
+                    if (!check_and_set_line(game_board,i,j,m,n,player)) {
                         break;
                     }
                 }
-                Log.log("after horizon & vertical limits "+horizontal_limit+", "+vertical_limit);
-                Log.log(toString(game_board,null));
+//                Log.log("after horizon & vertical limits "+horizontal_limit+", "+vertical_limit);
+//                Log.log(toString(game_board,null));
             }
         }
         return game_board;
@@ -207,30 +213,30 @@ class State {
      * @param player
      * @return whther can continue searching for nearest soldier with the same players soldier color
      */
-    private static boolean check_and_set_line(String[][] game_board, int x, int y, int i, int j, Player player) {
+    private static boolean check_and_set_line(String[][] game_board, int i, int j, int k, int l, Player player) {
         // skip current positioned soldier
-        if (x==i && y==j) {
+        if (i==k && j==l) {
             return true;
         }
         // complete a line of soldiers only in case of a contigous line of soldiers of any color
         // and that ends with a soldier with the same color on the other end
-        if (game_board[i][j].equals("E")) {
+        if (game_board[k][l].equals("E")) {
             return false;
         }
-        if (game_board[i][j].equals(player.soldier)) {
+        if (game_board[k][l].equals(player.soldier)) {
             // create a line from origin soldier to destination soldier
-            if (i == x) {
-                for (int n = y; j < y ? n > j : n < j; n += j < y ? -1 : 1) {
-                    game_board[x][n] = player.soldier;
+            if (k == i) {
+                for (int n = j; l < j ? n > l : n < l; n += l < j ? -1 : 1) {
+                    game_board[i][n] = player.soldier;
                 }
-            } else if (j == y) {
-                for (int m = x; i < x ? m > i : m < i; m += i < x ? -1 : 1) {
-                    game_board[m][y] = player.soldier;
+            } else if (l == j) {
+                for (int m = i; k < i ? m > k : m < k; m += k < i ? -1 : 1) {
+                    game_board[m][j] = player.soldier;
                 }
             } else {
-                for (int m = x, n = y;
-                     i < x ? m > i : m < i && j < y ? n > j : n < j;
-                     m += i < x ? -1 : 1, n += j < y ? -1 : 1) {
+                for (int m = i, n = j;
+                     k < i ? m > k : m < k && l < j ? n > l : n < l;
+                     m += k < i ? -1 : 1, n += l < j ? -1 : 1) {
                     game_board[m][n] = player.soldier;
                 }
             }
@@ -284,7 +290,7 @@ public class java_ex2 {
      * @return
      */
     static Choise play(State state, int level) {
-        Log.log("level="+level+", player="+state.player.soldier+", state:\n"+state);
+        Log.log("level="+(3-level)+", player="+state.player.soldier+", state:\n"+state);
         // last level / win or lose state
         if (level==0 || Double.isInfinite(state.value)) {
             return new Choise(state, state.value);
@@ -293,7 +299,7 @@ public class java_ex2 {
         for (State son:state.get_sons()) {
             choise_this_layer = state.player.choose(choise_this_layer, play(son, level-1));
         }
-        Log.log("chosen son value: "+choise_this_layer.propagated_value + ", chosen state:\n"+choise_this_layer.state);
+        Log.log("chosen son value at level "+(3-level)+" by player "+state.player.soldier+" is: "+choise_this_layer.propagated_value + ", chosen state:\n"+choise_this_layer.state);
         return choise_this_layer;
     }
 
@@ -347,9 +353,10 @@ public class java_ex2 {
     public static void main(String argv[]) {
         try {
             // TODO change to local in & outfile
-            produce_output("/home/nadav/workspaces/ml/ex2/resources/output.txt", search(parse_input("/home/nadav/workspaces/ml/ex2/resources/input.txt")));
-        } catch (IOException e) {
+            produce_output("/home/nadav/workspaces/ml/ex2/resources/output_mine.txt", search(parse_input("/home/nadav/workspaces/ml/ex2/resources/input.txt")));
+        } catch (Exception e) {
             e.printStackTrace();
+            Log.close();
         }
     }
 }
