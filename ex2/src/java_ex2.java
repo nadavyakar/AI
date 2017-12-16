@@ -7,6 +7,8 @@ class Log {
         try {
             writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/ml_ex2.log")));
             writer.write(msg+"\n");
+        } catch (Exception e) {
+
         } finally {
             try {writer.close();} catch (Exception ex) {
                 ex.printStackTrace();
@@ -29,7 +31,7 @@ class Choise {
 class Player {
     boolean black_player = true;
     String soldier;
-    static HashMap<boolean, Player> players = new HashMap<boolean, Player>();
+    static HashMap<Object, Player> players = new HashMap<Object, Player>();
     {
         players.put(true, new Player(true));
         players.put(false, new Player(false));
@@ -37,7 +39,7 @@ class Player {
         players.put("W", new Player(false));
     }
     Player(boolean black_player) {
-        boolean black_player = black_player;
+        this.black_player = black_player;
         this.soldier = black_player?"B":"W";
     }
     
@@ -55,23 +57,30 @@ class Player {
 class State {
     protected String[][] game_board;
     protected Set<int[]> open_cells_coordinates;
+    public Player player;
     public Double value;
 
-    public State(String[][] game_board) {
+    /**
+     *
+     * @param game_board
+     * @param player the player for which this state is the initial state of one of his turns
+     */
+    public State(String[][] game_board, Player player) {
         this.game_board = game_board;
         this.value = eval_board();
+        this.player=player;
     }
 
     protected Double eval_board() {
         // *_num represent the num of black/white/empty respectivley,
         // and black_border_num is the num of blacks on the boarded lines/columns
-        Double black_num = 0, white_num = 0, empty_num =0, black_boarder_num=0;
+        Double black_num = 0.0, white_num = 0.0, empty_num =0.0, black_boarder_num=0.0;
         for (int i=0; i< this.game_board.length; i++) {
             for (int j=0; j< this.game_board[i].length; j++) {
                 switch (this.game_board[i][j]) {
                     case "B":
                         black_num++;
-                        if (i==0 || j==0 || i==this.game_board.length || j=this.game_board[i].length) {
+                        if (i==0 || j==0 || i==this.game_board.length || j==this.game_board[i].length) {
                             black_boarder_num++;
                         }
                         break;
@@ -83,7 +92,7 @@ class State {
                         this.open_cells_coordinates.add(new int[] {i,j});
                         break;
                     default:
-                        throw Exception("illegal game board cell");
+                        throw new RuntimeException("illegal game board cell");
                 }
             }
         }
@@ -121,13 +130,14 @@ class State {
     /**
      * produce a list of optional states of the board game that can be reached from the current one in one turn
      */
-    public List<State> get_sons(Player player) {
-        List<State> sons = ArrayList<State>();
+    public List<State> get_sons() {
+        List<State> sons = new ArrayList<State>();
         Log.log("parent state game board:");
         Log.log(this.toString());
         for (int[] empty_cell_coordinates:this.open_cells_coordinates) {
             int x=empty_cell_coordinates[0], y=empty_cell_coordinates[1];
-            sons.add(new State(put_soldier(clone_game_board(), x, y, player)));
+            sons.add(new State(put_soldier(clone_game_board(), x, y, this.player),
+                    Player.players.get(!this.player.black_player)));
         }
         return sons;
     }
@@ -138,12 +148,12 @@ class State {
 
         Log.log("before putting " + player.soldier +" soldier at "+x+","+y);
         Log.log(toString(game_board,null));
-        int[]   horizontal_limits = {0, this.game_board.length},
-                vertical_limits = {0, this.game_board[0].length};
+        int[]   horizontal_limits = {0, game_board.length},
+                vertical_limits = {0, game_board[0].length};
         for (int horizontal_limit:horizontal_limits) {
             for (int i=x;
                  horizontal_limit<i?i>horizontal_limit:i<horizontal_limit;
-                 horizontal_limit<i?i--:i++) {
+                 i+=horizontal_limit<i?-1:1) {
                 if (!check_and_set_line(game_board,x,y,i,y,player)) {
                     break;
                 }
@@ -154,12 +164,12 @@ class State {
         for (int vertical_limit:vertical_limits) {
             for (int j=y;
                  vertical_limit<j?j>vertical_limit:j<vertical_limit;
-                 vertical_limit<j?j--:j++) {
+                 j+=vertical_limit<j?-1:1) {
                 if (!check_and_set_line(game_board,x,y,x,j,player)) {
                     break;
                 }
             }
-            Log.log("after vertical limit "+horizontal_limit);
+            Log.log("after vertical limit "+vertical_limit);
             Log.log(toString(game_board,null));
         }
         for (int horizontal_limit:horizontal_limits) {
@@ -167,7 +177,7 @@ class State {
                 for (int i=x, j=y;
                      horizontal_limit<i?i>horizontal_limit:i<horizontal_limit
                              && vertical_limit<j?j>vertical_limit:j<vertical_limit;
-                     horizontal_limit<i?i--:i++, vertical_limit<j?j--:j++) {
+                     i+=horizontal_limit<i?-1:1, j+=vertical_limit<j?-1:1) {
                     if (!check_and_set_line(game_board,x,y,i,j,player)) {
                         break;
                     }
@@ -176,6 +186,7 @@ class State {
                 Log.log(toString(game_board,null));
             }
         }
+        return game_board;
     }
 
     /**
@@ -194,31 +205,32 @@ class State {
         if (x==i && y==j) {
             return true;
         }
-        switch (game_board[i][j]) {
-            // complete a line of soldiers only in case of a contigous line of soldiers of any color
-            // and that ends with a soldier with the same color on the other end
-            case "E":
-                return false;
-            case player.soldier:
-                // create a line from origin soldier to destination soldier
-                if (i==x) {
-                    for (int n=y; j<y?n>j:n<j; j<y?n--:n++) {
-                        game_board[x][n]=player.soldier;
-                    }
-                } else if (j==y) {
-                    for (int m=x; i<x?m>i:m<i; i<x?m--:m++) {
-                        game_board[m][y]=player.soldier;
-                    }
-                } else {
-                    for (int m=x, n=y; i<x?m>i:m<i && j<y?n>j:n<j; i<x?m--:m++, j<y?n--:n++) {
-                        game_board[m][n] = player.soldier;
-                    }
-                }
-                return false;
-            // soldier of the other kind was found
-            default:
-                return true;
+        // complete a line of soldiers only in case of a contigous line of soldiers of any color
+        // and that ends with a soldier with the same color on the other end
+        if (game_board[i][j].equals("E")) {
+            return false;
         }
+        if (game_board[i][j].equals(player.soldier)) {
+            // create a line from origin soldier to destination soldier
+            if (i == x) {
+                for (int n = y; j < y ? n > j : n < j; n += j < y ? -1 : 1) {
+                    game_board[x][n] = player.soldier;
+                }
+            } else if (j == y) {
+                for (int m = x; i < x ? m > i : m < i; m += i < x ? -1 : 1) {
+                    game_board[m][y] = player.soldier;
+                }
+            } else {
+                for (int m = x, n = y;
+                     i < x ? m > i : m < i && j < y ? n > j : n < j;
+                     m += i < x ? -1 : 1, n += j < y ? -1 : 1) {
+                    game_board[m][n] = player.soldier;
+                }
+            }
+            return false;
+        }
+        // soldier of the other kind was found
+        return true;
     }
 
     protected String[][] clone_game_board() {
@@ -233,7 +245,6 @@ class State {
 
     static String toString(String[][] game_board, Set<int[]> open_cells_coordinates) {
         StringBuilder sb = new StringBuilder();
-        sb.append("value="+this.value+"\n");
         for (int i=0; i< game_board.length; i++) {
             for (int j=0; j< game_board[i].length; j++) {
                 sb.append(open_cells_coordinates!=null&&open_cells_coordinates.contains(new int[] {i,j})
@@ -243,6 +254,9 @@ class State {
         }
         return sb.toString();
     }
+    static String toString(String[][] game_board, Set<int[]> open_cells_coordinates, Double value) {
+        return "value="+value+"\n"+toString(game_board, open_cells_coordinates);
+    }
 
     /**
      *
@@ -251,7 +265,7 @@ class State {
      */
     @Override
     public String toString() {
-        toString(this.game_board, this.open_cells_coordinates);
+        return toString(this.game_board, this.open_cells_coordinates, this.value);
     }
 }
 
@@ -262,35 +276,32 @@ public class java_ex2 {
      * @param p the player currently playing. Either "W" or "B"
      * @return
      */
-    static Choise play(State state, int level, Player player) {
-        Log.log("level="+level+", player="+player.soldier+", state:\n"+state);
+    static Choise play(State state, int level) {
+        Log.log("level="+level+", player="+state.player.soldier+", state:\n"+state);
         // last level / win or lose state
         if (level==0 || Double.isInfinite(state.value)) {
             return new Choise(state, state.value);
         }
         Choise choise_this_layer = new Choise(null, Double. NaN);
         for (State son:state.get_sons()) {
-            choise_this_layer = player.choose(choise_this_layer,
-                    play(son, level-1, Player.players.get(! player.black_player)));
+            choise_this_layer = state.player.choose(choise_this_layer, play(son, level-1));
         }
         Log.log("chosen son value: "+choise_this_layer.propagated_value + ", chosen state:\n"+choise_this_layer.state);
         return choise_this_layer;
     }
 
     static String search(String[][] game_board) {
-        Choise choise = new Choise(new State(game_board), 0);
         // start with the black player
-        Player player = Player.players.get(false);
+        Choise choise = new Choise(new State(game_board, Player.players.get(true)), 0.0);
         // until victory or loss
         int level = 0;
         while (Double.isFinite(choise.propagated_value)) {
-            player = Player.players.get(!player.black_player);
-            Log.log("init state of player " + player.soldier +" at level "+level+":\n"+choise.state);
+            Log.log("init state of player " + choise.state.player.soldier +" at level "+level+":\n"+choise.state);
             // look 3 levels onward
-            choise = play(choise.state,3,player);
-            Log.log("choise after 3 layers deep search for player "+player.soldier+":\n"+choise.state)
+            choise = play(choise.state,3);
+            Log.log("choise after 3 layers deep search for player "+choise.state.player.soldier+":\n"+choise.state);
         }
-        return "B"?choise.propagated_value ==Double.POSITIVE_INFINITY:"W";
+        return choise.propagated_value ==Double.POSITIVE_INFINITY?"B":"W";
     }
 
     protected static void produce_output(String output_file_path, String winning_player) throws IOException {
