@@ -1,30 +1,6 @@
 import java.io.*;
 import java.util.*;
 
-//TODO remove
-class Log {
-    static Writer writer = null;
-    public static void log(String msg) {
-        try {
-            if (writer==null) {
-                writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("/tmp/ml_ex2.log")));
-            }
-            System.out.println(msg);
-            writer.write(msg+"\n");
-        } catch (Exception e) {
-            try {writer.close();} catch (Exception ex) {
-                ex.printStackTrace();
-            }
-        }
-    }
-    static void close() {
-        try {writer.close();} catch (Exception ex) {
-            ex.printStackTrace();
-        }
-    }
-}
-
-
 /**
  * represents a state chosen by the algorithm and its propagated value
  */
@@ -168,8 +144,6 @@ class State {
      */
     public List<State> get_sons() {
         List<State> sons = new ArrayList<State>();
-//        Log.log("parent state game board:");
-//        Log.log(this.toString());
         for (int[] empty_cell_coordinates:this.open_cells_coordinates) {
             int i=empty_cell_coordinates[0], j=empty_cell_coordinates[1];
             sons.add(new State(put_soldier(clone_game_board(), i, j, this.player),
@@ -185,9 +159,6 @@ class State {
     private static String[][] put_soldier(String[][] game_board, int i, int j, Player player) {
         game_board[i][j]=player.soldier;
         // find all lines "closed" by this soldier
-
-//        Log.log("before putting " + player.soldier +" soldier at "+i+","+j);
-//        Log.log(toString(game_board,null));
         int[]   horizontal_limits = {0, game_board.length},
                 vertical_limits = {0, game_board[0].length};
         for (int horizontal_limit:horizontal_limits) {
@@ -198,8 +169,6 @@ class State {
                     break;
                 }
             }
-//            Log.log("after horizon limit "+horizontal_limit);
-//            Log.log(toString(game_board,null));
         }
         for (int vertical_limit:vertical_limits) {
             for (int m=i;
@@ -209,8 +178,6 @@ class State {
                     break;
                 }
             }
-//            Log.log("after vertical limit "+vertical_limit);
-//            Log.log(toString(game_board,null));
         }
         for (int horizontal_limit:horizontal_limits) {
             for (int vertical_limit:vertical_limits) {
@@ -222,8 +189,6 @@ class State {
                         break;
                     }
                 }
-//                Log.log("after horizon & vertical limits "+horizontal_limit+", "+vertical_limit);
-//                Log.log(toString(game_board,null));
             }
         }
         return game_board;
@@ -309,7 +274,6 @@ public class java_ex2 {
      * @return
      */
     static Choise play(State state, int level) {
-        Log.log("level="+(3-level)+", player="+state.player.soldier+", state:\n"+state);
         // last level / win or lose state
         if (level==0 || Double.isInfinite(state.value)) {
             return new Choise(state, state.value);
@@ -318,7 +282,6 @@ public class java_ex2 {
         for (State son:state.get_sons()) {
             choise_this_layer = state.player.choose(choise_this_layer, play(son, level-1));
         }
-        Log.log("chosen son value at level "+(3-level)+" by player "+state.player.soldier+" is: "+choise_this_layer.propagated_value + ", chosen state:\n"+choise_this_layer.state);
         return choise_this_layer;
     }
 
@@ -331,10 +294,8 @@ public class java_ex2 {
         // until victory or loss
         int level = 0;
         while (Double.isFinite(choise.propagated_value)) {
-            Log.log("init state of player " + choise.state.player.soldier +" at level "+level+":\n"+choise.state);
             // look 3 levels onward
             choise = play(choise.state,3);
-            Log.log("choise after 3 layers deep search for player "+choise.state.player.soldier+":\n"+choise.state);
         }
         return choise.propagated_value ==Double.POSITIVE_INFINITY?"B":"W";
     }
@@ -377,7 +338,6 @@ public class java_ex2 {
             produce_output("output.txt", search(parse_input("input.txt")));
         } catch (Exception e) {
             e.printStackTrace();
-            Log.close();
         }
     }
 }
