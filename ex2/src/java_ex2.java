@@ -1,6 +1,7 @@
 import java.io.*;
 import java.util.*;
 
+//TODO remove
 class Log {
     static Writer writer = null;
     public static void log(String msg) {
@@ -23,6 +24,10 @@ class Log {
     }
 }
 
+
+/**
+ * represents a state chosen by the algorithm and its propagated value
+ */
 class Choise {
     Choise(State state, Double propagated_value) {
         this.state = state;
@@ -34,6 +39,9 @@ class Choise {
     Double propagated_value = Double.NaN;
 }
 
+/**
+ * encaptulates the player's representation and the way he makes his next move (max/main)
+ */
 class Player {
     boolean black_player = true;
     String soldier;
@@ -52,7 +60,13 @@ class Player {
         this.black_player = black_player;
         this.soldier = black_player?"B":"W";
     }
-    
+
+    /**
+     * return the move this player would have done given the best state to be done so far per the state the player
+     * is in and another child state the player can go to
+     * @param choise_this_layer the best state to be done so far per the state the player is in
+     * @param choise_next_layer another child state the player can go to
+     */
     Choise choose(Choise choise_this_layer, Choise choise_next_layer) {
         Double choise_this_layer_val = choise_this_layer.propagated_value ==Double.NaN?Double.valueOf(0):choise_this_layer.propagated_value;
         Double choise_next_layer_val = choise_next_layer.propagated_value ==Double.NaN?Double.valueOf(0):choise_next_layer.propagated_value;
@@ -67,6 +81,9 @@ class Player {
     }
 }
 
+/**
+ * a setup of the board at a certain time
+ */
 class State {
     protected String[][] game_board;
     protected Set<int[]> open_cells_coordinates = new LinkedHashSet<int[]>();
@@ -84,10 +101,13 @@ class State {
         this.player=player;
     }
 
+    /**
+     * evaluate the gap between the black and the white players for the given state
+     */
     protected Double eval_board() {
         // *_num represent the num of black/white/empty respectivley,
         // and black_border_num is the num of blacks on the boarded lines/columns
-        Double black_num = 0.0, white_num = 0.0, empty_num =0.0, black_boarder_num=0.0;
+        Double black_num = 0.0, white_num = 0.0, empty_num =0.0, black_boarder_num=0.0, white_boarder_num=0.0;
         for (int i=0; i< this.game_board.length; i++) {
             for (int j=0; j< this.game_board[i].length; j++) {
                 switch (this.game_board[i][j]) {
@@ -99,6 +119,9 @@ class State {
                         break;
                     case "W":
                         white_num++;
+                        if (i==0 || j==0 || i==this.game_board.length || j==this.game_board[i].length) {
+                            white_boarder_num++;
+                        }
                         break;
                     case "E":
                         empty_num++;
@@ -137,7 +160,7 @@ class State {
             }
             return Double.NaN;
         }
-        return black_boarder_num + black_num - white_num;
+        return black_boarder_num - white_boarder_num + black_num - white_num;
     }
 
     /**
@@ -155,6 +178,10 @@ class State {
         return sons;
     }
 
+    /**
+     * put a soldier of the given player type on i,j over game_board,
+     * and turn whichever opposite soldiers caught between this one and another soldir of the same type on the board
+     */
     private static String[][] put_soldier(String[][] game_board, int i, int j, Player player) {
         game_board[i][j]=player.soldier;
         // find all lines "closed" by this soldier
@@ -205,13 +232,7 @@ class State {
     /**
      * complete a line of soldiers only in case of a contigous line of soldiers of any color
      * and that ends with a soldier with the same color on the other end
-     * @param game_board
-     * @param x
-     * @param y
-     * @param i
-     * @param j
-     * @param player
-     * @return whther can continue searching for nearest soldier with the same players soldier color
+     * @return whether can continue searching for nearest soldier with the same players soldier color
      */
     private static boolean check_and_set_line(String[][] game_board, int i, int j, int k, int l, Player player) {
         // skip current positioned soldier
@@ -272,9 +293,7 @@ class State {
     }
 
     /**
-     *
      * for debugging
-     * @return
      */
     @Override
     public String toString() {
@@ -303,6 +322,9 @@ public class java_ex2 {
         return choise_this_layer;
     }
 
+    /**
+     * initiate a min-max search over game_board with the black player as the first one to make a move
+     */
     static String search(String[][] game_board) {
         // start with the black player
         Choise choise = new Choise(new State(game_board, Player.get_players().get(true)), 0.0);
@@ -352,8 +374,7 @@ public class java_ex2 {
 
     public static void main(String argv[]) {
         try {
-            // TODO change to local in & outfile
-            produce_output("/home/nadav/workspaces/ml/ex2/resources/output_mine.txt", search(parse_input("/home/nadav/workspaces/ml/ex2/resources/input.txt")));
+            produce_output("output.txt", search(parse_input("input.txt")));
         } catch (Exception e) {
             e.printStackTrace();
             Log.close();
